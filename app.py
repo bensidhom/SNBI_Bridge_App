@@ -5,7 +5,7 @@ import folium
 from streamlit_folium import folium_static
 
 # Connect to the SQLite database
-conn = sqlite3.connect('bridges1.db')
+conn = sqlite3.connect('bridges5.db')
 
 # Get list of tables dynamically
 tables_df = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table';", conn)

@@ -18,7 +18,7 @@ mapping = {
     'BL10': 'border_bridge_designated_lead_state',
     'BL11': 'bridge_location',
     'BL12': 'metropolitan_planning_organization',
-    'BCL01': 'owner_',
+    'BCL01': 'owner',
     'BCL02': 'maintenance_responsibility',
     'BCL03': 'federal_or_tribal_land_access',
     'BCL04': 'historical_significance',
@@ -160,11 +160,11 @@ mapping = {
 }
 
 # Connect to the database
-conn = sqlite3.connect('bridges1.db')
+conn = sqlite3.connect('bridges4.db')
 cursor = conn.cursor()
 
 # Load JSON data
-with open('bridge.json', 'r') as f:
+with open('nj_bridges_converted.json', 'r') as f:
     data = json.load(f)
 
 for bridge_data in data:

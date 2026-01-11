@@ -1,7 +1,7 @@
 import sqlite3
 
 # Connect to the SQLite database (creates the file if it doesn't exist)
-conn = sqlite3.connect('bridges1.db')
+conn = sqlite3.connect('bridges5.db')
 cursor = conn.cursor()
 
 # SQL schema as a multi-line string
@@ -26,7 +26,7 @@ CREATE TABLE bridges (
     border_bridge_designated_lead_state TEXT,
     bridge_location TEXT,
     metropolitan_planning_organization TEXT,
-    owner_ TEXT,
+    owner TEXT,
     maintenance_responsibility TEXT,
     federal_or_tribal_land_access TEXT,
     historical_significance TEXT,
