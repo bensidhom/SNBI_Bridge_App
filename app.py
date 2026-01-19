@@ -6,6 +6,9 @@ from streamlit_folium import folium_static
 from folium import plugins
 import plotly.express as px
 from datetime import datetime
+import re
+
+
 
 
 # Complete US state/territory FIPS code mapping (used in National Bridge Inventory - NBI)
@@ -323,6 +326,236 @@ if not kpi_df.empty:
 
 else:
     st.info("No bridge data available for KPI calculations.")
+
+
+
+# ------------------ Bridge Editor Section ------------------
+
+
+DB_PATH = "bridges5.db"
+
+CHILD_TABLES = [
+    "features",
+    "span_sets",
+    "substructure_sets",
+    "elements",
+    "inspections",
+    "posting_evaluations",
+    "posting_statuses",
+    "works"
+]
+
+# ----------------------------
+# Database helpers
+# ----------------------------
+def get_connection():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+
+def update_bridge_id(old_state, old_bridge, new_state, new_bridge):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("BEGIN")
+
+        for table in CHILD_TABLES:
+            cur.execute(f"""
+                UPDATE {table}
+                SET state_code=?, bridge_number=?
+                WHERE state_code=? AND bridge_number=?
+            """, (new_state, new_bridge, old_state, old_bridge))
+
+        cur.execute("""
+            UPDATE bridges
+            SET state_code=?, bridge_number=?
+            WHERE state_code=? AND bridge_number=?
+        """, (new_state, new_bridge, old_state, old_bridge))
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+def load_table(query, params=()):
+    conn = get_connection()
+    df = pd.read_sql(query, conn, params=params)
+    conn.close()
+    return df
+
+
+def save_table(df, table, state_code, bridge_number):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(f"""
+        DELETE FROM {table}
+        WHERE state_code=? AND bridge_number=?
+    """, (state_code, bridge_number))
+
+    df.to_sql(table, conn, if_exists="append", index=False)
+    conn.commit()
+    conn.close()
+
+# ----------------------------
+# UI
+# ----------------------------
+st.title("SNBI Bridge Database Editor")
+
+# ----------------------------
+# Select bridge
+# ----------------------------
+bridges_df = load_table("""
+    SELECT state_code, bridge_number, bridge_name
+    FROM bridges
+    ORDER BY state_code, bridge_number
+""")
+
+if bridges_df.empty:
+    st.warning("No bridges found.")
+    st.stop()
+
+selected = st.selectbox(
+    "Select Bridge",
+    bridges_df.itertuples(index=False),
+    format_func=lambda x: f"{x.state_code}-{x.bridge_number} | {x.bridge_name}"
+)
+
+old_state = selected.state_code
+old_bridge = selected.bridge_number
+
+bridge = load_table("""
+    SELECT * FROM bridges
+    WHERE state_code=? AND bridge_number=?
+""", (old_state, old_bridge)).iloc[0]
+
+def get_table_schema(table):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+def render_bridge_form(row, schema):
+    updated = {}
+
+    for cid, name, col_type, notnull, dflt, pk in schema:
+        value = row[name]
+
+        if name in ("state_code", "bridge_number"):
+            st.text_input(name, value=str(value), disabled=True)
+            updated[name] = value
+            continue
+
+        if "INT" in col_type.upper():
+            updated[name] = st.number_input(
+                name,
+                value=int(value) if value is not None else None,
+                step=1
+            )
+
+        elif "REAL" in col_type.upper():
+            updated[name] = st.number_input(
+                name,
+                value=float(value) if value is not None else None
+            )
+
+        else:
+            updated[name] = st.text_input(
+                name,
+                value=value if value is not None else ""
+            )
+
+    return updated
+
+
+
+
+# ----------------------------
+# Edit main bridge table
+# ----------------------------
+bridge_schema = get_table_schema("bridges")
+bridge_row = load_table("""
+    SELECT * FROM bridges
+    WHERE state_code=? AND bridge_number=?
+""", (old_state, old_bridge)).iloc[0]
+
+st.header("Main Bridge Table")
+
+with st.form("bridge_form"):
+    updated = render_bridge_form(bridge_row, bridge_schema)
+    submitted = st.form_submit_button("Save Main Bridge Data")
+if submitted:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        columns = [
+            c for c in updated.keys()
+            if c not in ("state_code", "bridge_number")
+        ]
+
+        set_clause = ", ".join(f"{c}=?" for c in columns)
+        values = [updated[c] for c in columns]
+        values.extend([old_state, old_bridge])
+
+        cur.execute(f"""
+            UPDATE bridges
+            SET {set_clause}
+            WHERE state_code=? AND bridge_number=?
+        """, values)
+
+        conn.commit()
+        st.success("Main bridge updated successfully")
+
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Update failed: {e}")
+
+    finally:
+        conn.close()
+
+
+
+# ----------------------------
+# Child tables editor
+# ----------------------------
+
+
+
+
+
+
+
+st.header("Related Tables")
+
+tabs = st.tabs(CHILD_TABLES)
+
+for tab, table in zip(tabs, CHILD_TABLES):
+    with tab:
+        df = load_table(
+            f"SELECT * FROM {table} WHERE state_code=? AND bridge_number=?",
+            (old_state, old_bridge)
+        )
+
+        edited_df = st.data_editor(
+            df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key=table
+        )
+
+        if st.button(f"Save {table}", key=f"save_{table}"):
+            try:
+                save_table(edited_df, table, old_state, old_bridge)
+                st.success(f"{table} saved successfully")
+            except Exception as e:
+                st.error(f"Failed to save {table}: {e}")
+
+
 # Close the connection
 conn.close()
-
