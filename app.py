@@ -486,9 +486,43 @@ bridge_row = load_table("""
 
 st.header("Main Bridge Table")
 
+def render_bridge_form_compact(row, schema, ncols=2):
+    updated = {}
+    columns = st.columns(ncols)
+
+    for i, (cid, name, col_type, *_ ) in enumerate(schema):
+        col = columns[i % ncols]
+
+        value = row[name]
+
+        if name in ("state_code", "bridge_number"):
+            col.text_input(name, value=str(value), disabled=True)
+            updated[name] = value
+            continue
+
+        if "INT" in col_type.upper():
+            updated[name] = col.number_input(
+                name,
+                value=int(value) if value is not None else 0,
+                step=1
+            )
+        elif "REAL" in col_type.upper():
+            updated[name] = col.number_input(
+                name,
+                value=float(value) if value is not None else 0.0
+            )
+        else:
+            updated[name] = col.text_input(
+                name,
+                value=value if value is not None else ""
+            )
+    return updated
 with st.form("bridge_form"):
-    updated = render_bridge_form(bridge_row, bridge_schema)
+    updated = render_bridge_form_compact(bridge_row, bridge_schema, ncols=4)
     submitted = st.form_submit_button("Save Main Bridge Data")
+
+
+
 if submitted:
     conn = get_connection()
     cur = conn.cursor()
