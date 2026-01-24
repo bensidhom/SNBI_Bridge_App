@@ -1,0 +1,20 @@
+# Core app
+streamlit>=1.30
+pandas>=2.0
+
+# Webview (desktop wrapper)
+pywebview[edgechromium]>=4.4
+
+
+# Mapping
+folium>=0.15
+streamlit-folium>=0.18
+
+# Plotting
+plotly>=5.18
+
+# Image handling
+Pillow>=10.0
+
+# Packaging
+pyinstaller>=6.0

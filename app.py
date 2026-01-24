@@ -22,6 +22,29 @@ import tempfile
 import json
 from pathlib import Path
 from PIL import Image
+import os
+import sys
+
+import shutil
+
+def resource_path(relative_path):
+    try:
+        # If running as EXE, PyInstaller sets _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        # If running as script
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+USER_DB = os.path.join(os.path.expanduser("~"), "snbi_bridges.db")
+
+if not os.path.exists(USER_DB):
+    bundled_db = resource_path("bridges.db")  # Your existing resource_path function
+    shutil.copy(bundled_db, USER_DB)
+    print("Copied initial database to user folder.")
+
+save_dir = os.path.join(os.path.expanduser("~"), "SNBI_Exports")
+os.makedirs(save_dir, exist_ok=True)
 
 st.set_page_config(layout="wide")
 
@@ -36,10 +59,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+img_path = resource_path("image_bridge.png")
+
 
 
 # Load image
-img = Image.open(r"image_bridge.png")  # replace with your file path
+img = Image.open(img_path)  # replace with your file path
 
 # Display image
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -561,12 +586,17 @@ if st.button("Convert to SNBI JSON", disabled=not (txt_file and xml_file)):
         ensure_ascii=False
     ).encode("utf-8")
 
-    st.download_button(
-        label="Download SNBI JSON",
-        data=json_bytes,
-        file_name="snbi_bridges.json",
-        mime="application/json"
+
+    save_path = os.path.join(
+        save_dir,
+        f"snbi_bridges.json"
     )
+
+    with open(save_path, "wb") as f:
+        f.write(json_bytes)
+
+    st.success(f"Saved locally to: {save_path}")
+
 
 
 
@@ -767,7 +797,7 @@ st.markdown("""
 uploaded_file = st.file_uploader("Upload bridge JSON", type=["json"])
 
 if st.button(" Load into SNBI Database ", disabled=not uploaded_file):
-    conn = sqlite3.connect('bridges5.db')
+    conn = sqlite3.connect(USER_DB)
 
     def get_table_columns(cursor, table_name):
         cursor.execute(f"PRAGMA table_info({table_name})")
@@ -992,7 +1022,7 @@ STATE_MAP = {
     78: 'Virgin Islands (VI)',
 }
 # Connect to the SQLite database
-conn = sqlite3.connect('bridges5.db')
+conn = sqlite3.connect(USER_DB)
 
 # Get list of tables dynamically
 tables_df = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table';", conn)
@@ -1318,7 +1348,7 @@ else:
 
 
 
-DB_PATH = "bridges5.db"
+
 
 CHILD_TABLES = [
     "features",
@@ -1335,7 +1365,7 @@ CHILD_TABLES = [
 # Database helpers
 # ----------------------------
 def get_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(USER_DB, check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
@@ -1720,12 +1750,15 @@ if st.button("Export SNBI to JSON"):
         indent=2
     ).encode("utf-8")
 
-    st.download_button(
-        label="Download SNBI JSON File",
-        data=json_bytes,
-        file_name=f"SNBI_{selected.state_code}_{selected.bridge_number}.json",
-        mime="application/json"
+    save_path = os.path.join(
+        save_dir,
+        f"SNBI_{selected.state_code}_{selected.bridge_number}.json"
     )
+
+    with open(save_path, "wb") as f:
+        f.write(json_bytes)
+
+    st.success(f"Saved locally to: {save_path}")
 
 
 
